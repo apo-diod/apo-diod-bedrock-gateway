@@ -1,0 +1,77 @@
+# =============================================================================
+# AWS Bedrock -> OpenAI-Compatible API Gateway Reference Configuration
+# Copy this file to config.toml and replace example Bearer keys before running.
+# =============================================================================
+
+# Optional top-level single-key shorthand.
+# Maps to a "default" tenant with wildcard model access (["*"]).
+# Can also be supplied or overridden via the GATEWAY_ACCESS_KEY env variable.
+# May be used standalone OR alongside named [[tenants]] entries below.
+access_key = ""
+
+[server]
+listen_addr = "0.0.0.0:8080"
+metrics_listen_addr = ""          # Empty = serve /metrics on listen_addr; set e.g. "127.0.0.1:9090" to isolate
+metrics_require_auth = true       # Require Bearer token on /metrics
+read_header_timeout = "10s"
+write_timeout = "0s"              # Disabled (0s) for long-lived SSE streams; request_timeout bounds upstream work
+request_timeout = "300s"
+max_request_body_bytes = 33554432 # 32 MiB (accommodates inline base64 images & PDF documents)
+tls_cert_file = ""                # Optional native TLS; leave empty when terminating TLS at ALB / reverse proxy
+tls_key_file = ""
+allow_remote_media_urls = false   # Keep false in VPC/EC2 environments to prevent SSRF against IMDS/internal hosts
+log_level = "info"                # "debug" | "info" | "warn" | "error"
+
+[aws]
+# Region for Bedrock requests. When left empty, falls back to AWS_REGION,
+# AWS_DEFAULT_REGION, shared profile region, or EC2 IMDSv2 auto-discovery.
+region = "us-east-1"
+
+# Explicit AWS credential source selection:
+#   "auto"         - Standard AWS SDK v2 chain (env -> EKS Web Identity -> ECS Task Role -> Profile -> EC2 IMDSv2)
+#   "imds"         - Pinned EC2 Instance Metadata Service v2 (fails fast with hop-limit hint if unreachable)
+#   "ecs"          - Pinned ECS Task Role / Container Credentials endpoint (AWS_CONTAINER_CREDENTIALS_*)
+#   "web_identity" - Pinned EKS IRSA Web Identity token file (AWS_ROLE_ARN + AWS_WEB_IDENTITY_TOKEN_FILE)
+#   "env"          - Pinned AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (+ optional AWS_SESSION_TOKEN)
+#   "profile"      - Pinned shared ~/.aws/config & ~/.aws/credentials profile
+credential_source = "auto"
+
+profile = ""                      # Used when credential_source = "profile" (or "auto")
+assume_role_arn = ""              # Optional cross-account IAM Role ARN to assume via STS
+assume_role_external_id = ""      # Optional STS ExternalId when assume_role_arn is set
+max_attempts = 3                  # Adaptive retry max attempts for Bedrock calls
+verify_credentials_on_startup = true
+
+# Optional AWS PrivateLink VPC interface endpoint URLs for air-gapped VPC deployments:
+# e.g. "https://vpce-0123456789abcdef0-abcdefgh.bedrock-runtime.us-east-1.vpce.amazonaws.com"
+bedrock_runtime_endpoint = ""
+bedrock_endpoint = ""
+sts_endpoint = ""
+
+[models]
+default_model = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+default_embedding_model = "amazon.titan-embed-text-v2:0"
+allow_passthrough = true          # Allow callers to pass raw Bedrock model IDs, inference profile IDs, or ARNs
+discover_bedrock_models = true    # Merge ListFoundationModels + ListInferenceProfiles (graceful fallback on 403)
+discovery_cache_ttl = "10m"
+enable_auto_prompt_cache = false  # Automatically inject Bedrock CachePoint blocks on supported Claude/Nova models
+
+[models.aliases]
+"gpt-4o" = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+"gpt-4o-mini" = "us.amazon.nova-lite-v1:0"
+"text-embedding-3-small" = "amazon.titan-embed-text-v2:0"
+
+[storage]
+sqlite_path = "/data/gateway.db"  # Pure-Go SQLite (WAL mode) backing stateful /v1/responses chaining
+responses_ttl = "168h"            # 7 days automatic expiry ("0s" disables expiry)
+cleanup_interval = "1h"
+
+[[tenants]]
+name = "team-alpha"
+access_key = "sk-gw-replace-me"
+access_keys = []                  # Additional active Bearer keys for zero-downtime key rotation
+allowed_models = ["*"]            # Exact aliases/IDs or prefix wildcards e.g. ["gpt-4o", "us.anthropic.*"]
+default_model = ""                # Optional per-tenant override for [models].default_model
+requests_per_second = 20.0        # 0 = unlimited
+burst = 40
+max_concurrent = 20               # Max simultaneous in-flight requests/streams (0 = unlimited)

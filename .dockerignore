@@ -1,0 +1,12 @@
+.git
+.gitignore
+.kilo
+README.md
+docker-compose.yml
+config.toml
+*.db
+*.db-shm
+*.db-wal
+data/
+bedrock-gateway
+*.test

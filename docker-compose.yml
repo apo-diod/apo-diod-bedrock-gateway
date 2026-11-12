@@ -1,0 +1,56 @@
+services:
+  bedrock-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: apo-diod-bedrock-gateway:latest
+    container_name: bedrock-gateway
+    restart: unless-stopped
+
+    # -------------------------------------------------------------------------
+    # AWS CREDENTIAL DELIVERY PRESETS (choose the mode matching your platform)
+    # -------------------------------------------------------------------------
+    #
+    # Preset 1 (Default below): EC2 Instance Profile over Docker Bridge Network
+    #   Requires EC2 IMDSv2 hop-limit >= 2 so token responses reach the bridge namespace:
+    #     aws ec2 modify-instance-metadata-options \
+    #       --instance-id i-0123456789abcdef0 \
+    #       --http-tokens required \
+    #       --http-put-response-hop-limit 2
+    #   Set [aws] credential_source = "imds" (or "auto") in config.toml.
+    ports:
+      - "8080:8080"
+
+    # Preset 2: EC2 Instance Profile over Host Network (works with default hop-limit = 1)
+    #   Uncomment network_mode: host below and comment out `ports:` above:
+    # network_mode: host
+
+    # Preset 3: ECS Task Role / EKS IRSA / Pod Identity / Explicit AWS_* Env Vars
+    #   Set [aws] credential_source = "ecs" | "web_identity" | "env" | "auto" in config.toml.
+    environment:
+      - GATEWAY_CONFIG=/etc/bedrock-gateway/config.toml
+      # - GATEWAY_ACCESS_KEY=${GATEWAY_ACCESS_KEY:-}
+      # - AWS_REGION=${AWS_REGION:-us-east-1}
+      # - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      # - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      # - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+
+    volumes:
+      - ./config.toml:/etc/bedrock-gateway/config.toml:ro
+      - gateway_data:/data
+
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/bedrock-gateway", "-healthcheck"]
+      interval: 15s
+      timeout: 4s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  gateway_data:

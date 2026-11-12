@@ -1,0 +1,17 @@
+# Compiled binaries
+/bedrock-gateway
+*.exe
+*.test
+*.out
+
+# Local runtime configuration & secrets (commit config.example.toml instead)
+/config.toml
+
+# Local SQLite database files
+*.db
+*.db-shm
+*.db-wal
+/data/
+
+# Kilo local state & plans
+/.kilo/
